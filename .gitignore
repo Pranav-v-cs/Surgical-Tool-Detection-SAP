@@ -1,0 +1,49 @@
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Python environments and generated files
+.venv/
+venv/
+env/
+ENV/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Editors and operating-system metadata
+.DS_Store
+._*
+Thumbs.db
+.idea/
+.vscode/
+*~
+*.swp
+
+# Runtime state
+*.log
+*.tmp
+*.cache
+data/*.db
+data/*.db-*
+
+# Large local assets (kept on disk, not committed to regular Git)
+dataset1-pic-xml/
+dataset_yolo/images/
+dataset_yolo/labels/
+runs/
+models/
+*.pt
+*.pth
+*.onnx
+*.engine
+*_ncnn_model/

@@ -1,0 +1,35 @@
+# requirements.txt
+# Install with: pip install -r requirements.txt
+
+# Core AI
+ultralytics>=8.2.0       # YOLOv8 (includes PyTorch dependency)
+torch>=2.1.0             # Install CUDA version separately! See note below.
+torchvision>=0.16.0
+
+# Image processing
+opencv-python>=4.8.0
+Pillow>=10.0.0
+numpy>=1.24.0
+
+# Utilities
+PyYAML>=6.0
+tqdm>=4.65.0
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# Export
+onnx>=1.14.0
+onnxruntime>=1.16.0
+
+# Optional: NCNN (Raspberry Pi export)
+# ncnn
+
+# ──────────────────────────────────────────────────────────────────────────────
+# ⚠  PyTorch CUDA Installation (RTX 3050 needs CUDA version, not CPU-only)
+# ──────────────────────────────────────────────────────────────────────────────
+# Run THIS FIRST before pip install -r requirements.txt:
+#
+#   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+#
+# (Use cu121 for CUDA 12.x, or cu118 for CUDA 11.8 — check with: nvcc --version)
+# ──────────────────────────────────────────────────────────────────────────────

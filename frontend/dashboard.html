@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Surgical Tools Detection — Dashboard</title>
+  <meta name="description" content="Real-time surgical instrument detection dashboard." />
+  <link rel="stylesheet" href="/static/css/style.css" />
+  <style>
+    /* Dashboard-specific tweaks */
+    body { overflow-y: auto; }
+
+    .panel-left  { display: flex; flex-direction: column; gap: 12px; }
+    .panel-center { display: flex; flex-direction: column; gap: 12px; }
+    .panel-right { display: flex; flex-direction: column; gap: 12px; }
+
+    /* Animated count bubble */
+    @keyframes pop {
+      0%   { transform: scale(1); }
+      40%  { transform: scale(1.25); }
+      100% { transform: scale(1); }
+    }
+    .count-bubble.pop { animation: pop 0.3s ease; }
+
+    /* Session form */
+    .sess-form { display: flex; flex-direction: column; gap: 8px; }
+
+    /* Bottom section */
+    .bottom-section {
+      padding: 0 20px 20px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    @media (max-width: 800px) {
+      .bottom-section { grid-template-columns: 1fr; }
+    }
+
+    /* Scrollable history */
+    .history-scroll { max-height: 260px; overflow-y: auto; }
+
+    /* Camera controls */
+    .cam-controls {
+      display: flex; gap: 8px; margin-top: 10px;
+    }
+    .btn-cam-on {
+      background: rgba(0,212,160,0.15);
+      color: var(--accent);
+      border: 1px solid rgba(0,212,160,0.35);
+      flex: 1; justify-content: center;
+    }
+    .btn-cam-on:hover, .btn-cam-on.active {
+      background: var(--accent); color: #000;
+      box-shadow: var(--accent-glow);
+    }
+    .btn-cam-off {
+      background: rgba(255,77,109,0.12);
+      color: var(--danger);
+      border: 1px solid rgba(255,77,109,0.3);
+      flex: 1; justify-content: center;
+    }
+    .btn-cam-off:hover, .btn-cam-off.active {
+      background: var(--danger); color: #fff;
+      box-shadow: 0 0 16px rgba(255,77,109,0.35);
+    }
+    .btn-upload {
+      background: rgba(77,171,247,0.12);
+      color: var(--info);
+      border: 1px solid rgba(77,171,247,0.3);
+      flex: 1; justify-content: center;
+    }
+    .btn-upload:hover {
+      background: var(--info); color: #000;
+      box-shadow: 0 0 16px rgba(77,171,247,0.35);
+    }
+    .upload-label {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 10px 16px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-family: var(--font); font-size: 0.875rem; font-weight: 500;
+      transition: var(--transition);
+      background: rgba(77,171,247,0.12);
+      color: var(--info);
+      border: 1px solid rgba(77,171,247,0.3);
+      flex: 1; justify-content: center;
+    }
+    .upload-label:hover {
+      background: var(--info); color: #000;
+      box-shadow: 0 0 16px rgba(77,171,247,0.35);
+    }
+    .cam-source-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 0.7rem; color: var(--text-muted);
+      margin-top: 6px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── Top bar ─────────────────────────────────────────────────── -->
+  <header class="topbar">
+    <div class="topbar-logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+      </svg>
+      Surgical Tools Detection
+    </div>
+
+    <div class="flex gap-3" style="align-items:center">
+      <span id="clock" style="font-family:var(--font-mono);color:var(--text-muted);font-size:0.85rem"></span>
+      <span id="ws-status" class=""></span>
+      <div class="flex gap-2" style="align-items:center">
+        <span id="user-name" style="font-size:0.85rem;color:var(--text-secondary)"></span>
+        <span id="user-role" class="badge"></span>
+      </div>
+      <button class="btn btn-ghost" id="btn-logout" onclick="logout()" style="padding:6px 14px;font-size:0.8rem">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        Logout
+      </button>
+    </div>
+  </header>
+
+  <!-- ── Main 3-column grid ─────────────────────────────────────── -->
+  <main class="dashboard-grid">
+
+    <!-- ── LEFT: Camera + live stats ─────────────────────────────── -->
+    <aside class="panel-left">
+
+      <!-- Camera feed -->
+      <div class="card" style="padding:14px">
+        <div class="panel-title">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>
+          Live Feed
+          <span id="cam-source-badge" class="cam-source-badge" style="margin-left:auto">
+            <span class="pulse-dot active"></span> Webcam
+          </span>
+        </div>
+        <img id="camera-feed" alt="Live detection feed" style="display:none" />
+        <div id="camera-placeholder" class="camera-placeholder">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.5"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+          <span class="text-sm">Waiting for camera&hellip;</span>
+        </div>
+
+        <!-- Camera controls -->
+        <div class="cam-controls">
+          <button id="btn-cam-toggle" class="btn btn-cam-on active" onclick="toggleCamera()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+            Camera ON
+          </button>
+          <label for="upload-input" class="upload-label">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
+            Upload Image
+          </label>
+          <input type="file" id="upload-input" accept="image/*" style="display:none" onchange="uploadImage(event)" />
+        </div>
+
+        <!-- Upload loading indicator -->
+        <div id="upload-status" style="display:none;margin-top:8px;font-size:0.75rem;color:var(--text-muted);text-align:center">
+          Running detection&hellip;
+        </div>
+      </div>
+
+      <div class="card" style="padding:14px">
+        <div class="panel-title">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+          Currently Detected
+        </div>
+        <div style="display:flex;align-items:center;gap:16px;margin-bottom:12px">
+          <div class="count-bubble" id="count-bubble">
+            <span id="detection-count">0</span>
+          </div>
+          <div>
+            <div style="font-size:0.75rem;color:var(--text-muted)">Tools in frame</div>
+            <div style="font-size:0.85rem;color:var(--text-secondary);margin-top:2px">Real-time &bull; live confidence</div>
+          </div>
+        </div>
+        <!-- Live tool list — updated by WebSocket on every frame -->
+        <div id="live-tools-list" style="display:flex;flex-direction:column;gap:6px">
+          <div class="stat-row"><span class="stat-label" style="color:var(--text-muted)">No tools in frame</span></div>
+        </div>
+      </div>
+
+    </aside>
+
+    <!-- ── CENTER: 26 tool cards ──────────────────────────────────── -->
+    <section class="panel-center">
+      <div class="card" style="padding:14px; flex:1">
+        <div class="panel-title">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          Instrument Detection Grid
+          <span style="margin-left:auto;font-size:0.7rem;color:var(--text-muted)">26 instruments</span>
+        </div>
+        <div class="tools-grid" id="tools-grid">
+          <!-- Built dynamically by dashboard.js -->
+        </div>
+      </div>
+    </section>
+
+    <!-- ── RIGHT: Surgery session + controls ─────────────────────── -->
+    <aside class="panel-right">
+
+      <!-- Session timer -->
+      <div class="card" style="padding:14px;text-align:center">
+        <div class="panel-title" style="justify-content:center">
+          <span class="pulse-dot" id="session-dot" style="background:var(--text-muted)"></span>
+          Surgery Timer
+        </div>
+        <div class="timer" id="session-timer">00:00:00</div>
+      </div>
+
+      <!-- Active session info -->
+      <div class="card" style="padding:14px" id="has-session" style="display:none">
+        <div class="panel-title">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Active Session
+        </div>
+        <div class="stat-row mt-2">
+          <span class="stat-label">OR</span>
+          <span class="stat-value" id="sess-or">—</span>
+        </div>
+        <div class="stat-row mt-2">
+          <span class="stat-label">Surgeon</span>
+          <span class="stat-value" id="sess-surgeon">—</span>
+        </div>
+        <button id="btn-end" class="btn btn-danger w-full mt-3" onclick="endSurgery()" style="justify-content:center;display:none">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/></svg>
+          End Surgery
+        </button>
+      </div>
+
+      <div class="card" style="padding:14px" id="reconciliation-card">
+        <div class="panel-title">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          Tool Reconciliation
+          <span id="recon-status-badge" style="margin-left:auto;font-size:0.65rem;color:var(--text-muted)">Ready</span>
+        </div>
+        <div class="recon-actions">
+          <button id="btn-save-tools" class="btn btn-save-tools" onclick="saveTools()" style="flex:1;justify-content:center">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/></svg>
+            Save Tools
+          </button>
+          <button id="btn-check-tools" class="btn btn-check-tools" onclick="checkTools()" style="flex:1;justify-content:center">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><circle cx="12" cy="12" r="10"/></svg>
+            Check Tools
+          </button>
+        </div>
+        <div id="recon-panel" class="recon-panel">
+          <div class="stat-row"><span class="stat-label">Saved Tools</span><span class="stat-value" id="recon-saved-count">0</span></div>
+          <div class="stat-row"><span class="stat-label">Current Tools</span><span class="stat-value" id="recon-current-count">0</span></div>
+          <div class="stat-row"><span class="stat-label">Missing</span><span class="stat-value" id="recon-missing-count">0</span></div>
+          <div class="stat-row"><span class="stat-label">Checked</span><span class="stat-value" id="recon-checked-at">--</span></div>
+          <div class="recon-list-block">
+            <div class="recon-list-title">Missing Tools</div>
+            <div id="recon-missing-list" class="recon-list empty">None</div>
+          </div>
+          <div class="recon-list-block">
+            <div class="recon-list-title">Present Tools</div>
+            <div id="recon-present-list" class="recon-list empty">None</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Start surgery form -->
+      <div class="card" style="padding:14px" id="no-session">
+        <div class="panel-title">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          New Session
+        </div>
+        <div class="sess-form">
+          <input id="or-name" class="input" placeholder="Operating Room (e.g. OR-1)" />
+          <input id="surgeon-name" class="input" placeholder="Surgeon name" />
+          <button id="btn-start" class="btn btn-primary w-full" onclick="startSurgery()" style="justify-content:center">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Start Surgery
+          </button>
+        </div>
+      </div>
+
+      <!-- Quick legend -->
+      <div class="card" style="padding:14px">
+        <div class="panel-title">Legend</div>
+        <div class="flex gap-2 mt-2" style="flex-direction:column">
+          <div class="flex gap-2" style="align-items:center;font-size:0.78rem;color:var(--text-secondary)">
+            <div style="width:10px;height:10px;border-radius:2px;background:var(--accent);flex-shrink:0"></div>
+            Tool detected in frame
+          </div>
+          <div class="flex gap-2" style="align-items:center;font-size:0.78rem;color:var(--text-secondary)">
+            <div style="width:10px;height:10px;border-radius:2px;background:rgba(255,255,255,0.06);border:1px solid var(--border);flex-shrink:0"></div>
+            Tool not visible
+          </div>
+        </div>
+      </div>
+
+    </aside>
+  </main>
+
+  <!-- ── Bottom: History + Stats ────────────────────────────────── -->
+  <div class="bottom-section">
+
+    <!-- Surgery history -->
+    <div class="card" style="padding:16px">
+      <div class="panel-title">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="14 2 14 8 20 8"/><path d="M20 22H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h10l8 8v10a2 2 0 0 1-2 2z"/></svg>
+        Surgery History
+      </div>
+      <div class="history-scroll">
+        <table class="history-table">
+          <thead>
+            <tr>
+              <th>OR</th>
+              <th>Surgeon</th>
+              <th>Started</th>
+              <th>Duration</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="history-tbody">
+            <tr><td colspan="5" class="text-muted" style="padding:20px;text-align:center">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Top detected tools (historical) -->
+    <div class="card" style="padding:16px">
+      <div class="panel-title">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        Most Detected Tools — All Sessions
+        <span style="margin-left:auto;font-size:0.65rem;color:var(--text-muted)"># of frames detected</span>
+      </div>
+      <div id="stats-history-list" style="display:flex;flex-direction:column;gap:6px;margin-top:8px">
+        <div class="stat-row"><span class="stat-label" style="color:var(--text-muted)">No data yet — start a surgery session</span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Toast notification -->
+  <div class="toast" id="toast"></div>
+
+  <script src="/static/js/dashboard.js"></script>
+</body>
+</html>

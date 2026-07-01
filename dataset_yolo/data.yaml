@@ -1,0 +1,32 @@
+train: images/train
+val:   images/val
+test:  images/test
+
+nc: 26
+names:
+  - tool_1
+  - tool_2
+  - tool_3
+  - tool_4
+  - tool_5
+  - tool_6
+  - tool_7
+  - tool_8
+  - tool_9
+  - tool_10
+  - tool_11
+  - tool_12
+  - tool_13
+  - tool_14
+  - tool_15
+  - tool_16
+  - tool_17
+  - tool_18
+  - tool_19
+  - tool_20
+  - tool_21
+  - tool_22
+  - tool_23
+  - tool_24
+  - tool_25
+  - tool_26

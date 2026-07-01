@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Surgical Tools Detection — Login</title>
+  <meta name="description" content="Secure login to the Surgical Tools Detection real-time monitoring platform." />
+  <link rel="stylesheet" href="/static/css/style.css" />
+  <style>
+    /* Extra login-only polish */
+    .login-card { box-shadow: 0 32px 80px rgba(0,0,0,0.6); }
+    .login-icon {
+      width: 52px; height: 52px; border-radius: 14px;
+      background: var(--accent-dim); border: 1px solid var(--border-glow);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .cred-hint {
+      margin-top: 24px; padding: 14px 16px;
+      background: rgba(255,255,255,0.03); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); font-size: 0.75rem; color: var(--text-muted);
+    }
+    .cred-hint strong { color: var(--text-secondary); }
+    .cred-row { display: flex; justify-content: space-between; margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <div class="login-bg">
+    <div class="login-card">
+
+      <!-- Logo -->
+      <div class="login-logo">
+        <div class="login-icon">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+          </svg>
+        </div>
+        <span>Surgical Tools Detection</span>
+      </div>
+      <p class="login-subtitle">Hospital-grade instrument monitoring system</p>
+
+      <!-- Form -->
+      <form id="login-form">
+        <div class="form-group">
+          <label class="form-label" for="username">Username</label>
+          <input id="username" type="text" class="input" placeholder="Enter username" autocomplete="username" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="password">Password</label>
+          <input id="password" type="password" class="input" placeholder="Enter password" autocomplete="current-password" required />
+        </div>
+
+        <div class="error-msg" id="error-msg">⚠ Invalid username or password</div>
+
+        <button type="submit" class="btn btn-primary w-full" id="login-btn" style="margin-top:20px; justify-content:center;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+          Sign in
+        </button>
+      </form>
+
+      <!-- Dev hints -->
+      <div class="cred-hint">
+        <strong>Demo credentials</strong>
+        <div class="cred-row"><span>Nurse:</span>   <span>nurse1 / nurse123</span></div>
+        <div class="cred-row"><span>Surgeon:</span> <span>surgeon1 / surgeon123</span></div>
+        <div class="cred-row"><span>Admin:</span>   <span>admin / admin123</span></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Redirect if already logged in
+    if (localStorage.getItem('sap_token')) location.href = '/dashboard';
+
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('login-btn');
+      const errEl = document.getElementById('error-msg');
+      errEl.classList.remove('show');
+      btn.disabled = true;
+      btn.textContent = 'Signing in…';
+
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+
+      try {
+        const res = await fetch('/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          localStorage.setItem('sap_token', data.access_token);
+          localStorage.setItem('sap_user', JSON.stringify({ username: data.username, role: data.role }));
+          location.href = '/dashboard';
+        } else {
+          errEl.classList.add('show');
+          btn.disabled = false;
+          btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg> Sign in`;
+        }
+      } catch {
+        errEl.textContent = '⚠ Server unreachable';
+        errEl.classList.add('show');
+        btn.disabled = false;
+        btn.textContent = 'Sign in';
+      }
+    });
+  </script>
+</body>
+</html>
