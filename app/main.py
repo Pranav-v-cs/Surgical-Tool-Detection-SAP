@@ -145,6 +145,7 @@ def _on_frame(frame: np.ndarray):
 
 def _persist_detection_sample(detections: list[dict]):
     if not state.active_session_id or not detections:
+        print(f"[DB] Skipped — no active session ({state.active_session_id}) or no detections")
         return
 
     global _last_persist_at, _last_detection_signature
@@ -155,6 +156,7 @@ def _persist_detection_sample(detections: list[dict]):
         or now - _last_persist_at >= DETECTION_PERSIST_INTERVAL_SECONDS
     )
     if not should_persist:
+        print(f"[DB] Rate-limited — same signature ({signature}) or < {DETECTION_PERSIST_INTERVAL_SECONDS}s since last write")
         return
 
     db = SessionLocal()
@@ -167,6 +169,7 @@ def _persist_detection_sample(detections: list[dict]):
         db.commit()
         _last_persist_at = now
         _last_detection_signature = signature
+        print(f"[DB] Saved DetectionEvent: session={state.active_session_id} tools={len(detections)}")
     finally:
         db.close()
 
@@ -174,10 +177,13 @@ def _persist_detection_sample(detections: list[dict]):
 def run_inference_on_latest_frame() -> list[dict]:
     frame = state.get_latest_frame()
     if frame is None:
+        print("[INFERENCE] No frame available, skipping")
         return []
 
+    print(f"[INFERENCE] Running on frame shape={frame.shape} session={state.active_session_id}")
     detections = get_engine().detect(frame)
     payload = detections_to_payload(detections)
+    print(f"[INFERENCE] → {len(payload)} tools detected")
     state.set_latest_detections(payload, datetime.utcnow())
     _persist_detection_sample(payload)
     return payload

@@ -8,20 +8,21 @@ import numpy as np
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional, Tuple
-from ultralytics import YOLO
+from ultralytics import YOLO  # type: ignore
 
 # Search these paths for best.pt (in priority order)
 MODEL_SEARCH_PATHS = [
-    Path("runs/detect/runs/surgical/yolov8s_instruments/weights/best.pt"),
-    Path("models/best.pt"),
-    Path("runs/surgical/yolov8s_instruments/weights/best.pt"),
-    Path("runs/detect/runs/surgical/yolov8s_instruments-7/weights/best.pt"),
+    # Path("runs/detect/runs/surgical/yolov8s_instruments/weights/best.pt"),
+    # Path("models/best.pt"),
+    # Path("runs/surgical/yolov8s_instruments/weights/best.pt"),
+    # Path("runs/detect/runs/surgical/yolov8s_instruments-7/weights/best.pt"),
+    Path("runs/detect/test/runs_detect_train_weights_best.pt")
 ]
 
 NUM_CLASSES = 26
 # Minimum confidence to report a detection.
 # Raise this if you see false positives; lower it if real tools are being missed.
-CONF_THRESHOLD = 0.45
+CONF_THRESHOLD = 0.40
 
 
 @dataclass
@@ -56,9 +57,14 @@ class InferenceEngine:
 
         h, w = frame.shape[:2]
 
+        raw_count = len(results.boxes)
+        print(f"  [RAW] {raw_count} raw detections")
+        for box in results.boxes:
+            cls_id = int(box.cls[0])
+            conf  = float(box.conf[0])
+            print(f"    class={cls_id} tool={cls_id + 1} conf={conf:.4f}")
+
         # Deduplicate: for each tool class keep only the highest-confidence box.
-        # This prevents the same physical tool being reported twice due to
-        # overlapping or near-duplicate bounding boxes.
         best: dict[int, Detection] = {}
         for box in results.boxes:
             cls_id = int(box.cls[0])
@@ -74,8 +80,12 @@ class InferenceEngine:
                           round(x2 / w, 4), round(y2 / h, 4)],
                 )
 
-        # Return sorted by confidence descending
-        return sorted(best.values(), key=lambda d: d.confidence, reverse=True)
+        deduped = sorted(best.values(), key=lambda d: d.confidence, reverse=True)
+        print(f"  [DEDUP] {len(deduped)} unique tools")
+        for d in deduped:
+            print(f"    {d.name}: conf={d.confidence:.4f}  bbox={[round(v, 3) for v in d.bbox]}")
+
+        return deduped
 
     def detect_with_viz(self, frame: np.ndarray) -> Tuple[List[Detection], str]:
         """Returns (detections, annotated JPEG as base64 string)."""

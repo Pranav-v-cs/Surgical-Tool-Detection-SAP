@@ -67,7 +67,7 @@ class WebcamCamera:
             time.sleep(interval)
 
     def _open_capture(self) -> bool:
-        self._cap = cv2.VideoCapture(self.index, cv2.CAP_DSHOW)
+        self._cap = cv2.VideoCapture(self.index)
         if not self._cap.isOpened():
             return False
         self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
