@@ -49,6 +49,15 @@ def _audit(db: Session, request: Request, user: models.User, action: str, detail
 
 
 def _force_latest_inference() -> tuple[list[dict], datetime]:
+    # Use the stored detections if available — they come from the last upload
+    # or the last real camera frame.  Re-running inference on state.latest_frame
+    # is unreliable because the simulated camera overwrites it with a blank
+    # frame at 18 FPS, which always yields 0 detections.
+    stored, timestamp = state.get_latest_detections()
+    if stored:
+        return stored, timestamp or datetime.utcnow()
+
+    # No stored detections yet — try to infer from whatever frame we have.
     frame = state.get_latest_frame()
     if frame is None:
         raise HTTPException(status_code=400, detail="No camera frame available")
@@ -56,6 +65,7 @@ def _force_latest_inference() -> tuple[list[dict], datetime]:
     detections = detections_to_payload(get_engine().detect(frame))
     state.set_latest_detections(detections, timestamp)
     return detections, timestamp
+
 
 
 @router.get("/stats")

@@ -18,6 +18,9 @@ ws_manager: Optional[Any] = None
 # Camera pause flag — toggled by /detect/camera/toggle
 camera_paused: bool = False
 
+# True when running on simulated (blank) camera — set by camera init in main.py
+is_simulated_camera: bool = True
+
 # Latest detection payload from the live pipeline or upload flow.
 latest_detections: list[dict[str, Any]] = []
 latest_detection_timestamp: Optional[datetime] = None
@@ -46,3 +49,4 @@ def set_latest_detections(detections: list[dict[str, Any]], timestamp: Optional[
 def get_latest_detections() -> tuple[list[dict[str, Any]], Optional[datetime]]:
     with _state_lock:
         return [dict(item) for item in latest_detections], latest_detection_timestamp
+

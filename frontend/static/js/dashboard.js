@@ -1,6 +1,6 @@
 /* ── dashboard.js — WebSocket client + live UI ── */
 
-const API    = '';
+const API = '';
 const WS_URL = `ws://${location.host}/ws`;
 
 let ws = null;
@@ -10,10 +10,11 @@ let timerInterval = null;
 let currentUser = null;
 let currentSession = null;
 let toolsSavedForSession = false;
+let isUploadMode = false;    // true after an image upload — WS frames won't overwrite until camera is toggled ON
 
 // ── Auth helpers ──────────────────────────────────────────────────
 function getToken() { return localStorage.getItem('sap_token'); }
-function getUser()  { return JSON.parse(localStorage.getItem('sap_user') || 'null'); }
+function getUser() { return JSON.parse(localStorage.getItem('sap_user') || 'null'); }
 
 function authHeaders() {
   return { 'Authorization': `Bearer ${getToken()}`, 'Content-Type': 'application/json' };
@@ -39,11 +40,19 @@ async function toggleCamera() {
   if (!res || !res.ok) { showToast('Toggle failed', 'error'); return; }
   const data = await res.json();
   cameraIsPaused = data.camera_paused;
+  // Switching camera ON clears upload-mode so live frames take over again
+  if (!cameraIsPaused) {
+    isUploadMode = false;
+    const feed = document.getElementById('camera-feed');
+    const placeholder = document.getElementById('camera-placeholder');
+    if (feed) { feed.src = ''; feed.style.display = 'none'; }
+    if (placeholder) placeholder.style.display = 'flex';
+  }
   updateCameraToggleUI();
 }
 
 function updateCameraToggleUI() {
-  const btn   = document.getElementById('btn-cam-toggle');
+  const btn = document.getElementById('btn-cam-toggle');
   const badge = document.getElementById('cam-source-badge');
   if (!btn) return;
 
@@ -73,11 +82,11 @@ async function uploadImage(event) {
   if (!file) return;
 
   // Show loading state
-  const statusEl  = document.getElementById('upload-status');
-  const badge     = document.getElementById('cam-source-badge');
+  const statusEl = document.getElementById('upload-status');
+  const badge = document.getElementById('cam-source-badge');
   const uploadLbl = document.querySelector('.upload-label');
 
-  if (statusEl)  { statusEl.style.display = 'block'; statusEl.textContent = 'Running detection…'; }
+  if (statusEl) { statusEl.style.display = 'block'; statusEl.textContent = 'Running detection…'; }
   if (uploadLbl) uploadLbl.style.opacity = '0.5';
 
   const formData = new FormData();
@@ -105,13 +114,14 @@ async function uploadImage(event) {
       feed.src = `data:image/jpeg;base64,${data.frame}`;
       feed.style.display = 'block';
       if (placeholder) placeholder.style.display = 'none';
+      isUploadMode = true;  // keep this image visible until camera is toggled ON
     }
 
     // Update tool cards
     handleDetection({ ...data, type: 'detection' });
 
     // Update source badge
-    if (badge) badge.innerHTML = `<span class="pulse-dot" style="background:var(--info)"></span> <span style="color:var(--info)">Image: ${file.name.slice(0,16)}${file.name.length>16?'…':''}</span>`;
+    if (badge) badge.innerHTML = `<span class="pulse-dot" style="background:var(--info)"></span> <span style="color:var(--info)">Image: ${file.name.slice(0, 16)}${file.name.length > 16 ? '…' : ''}</span>`;
 
     showToast(`${data.tool_count} tool${data.tool_count !== 1 ? 's' : ''} detected`, 'success');
 
@@ -128,7 +138,7 @@ async function uploadImage(event) {
 
 // Expose globally
 window.toggleCamera = toggleCamera;
-window.uploadImage  = uploadImage;
+window.uploadImage = uploadImage;
 
 
 
@@ -177,7 +187,7 @@ function buildToolGrid() {
     card.className = 'tool-card';
     card.id = `tool-${i}`;
     card.innerHTML = `
-      <div class="tool-num">T-${String(i).padStart(2,'0')}</div>
+      <div class="tool-num">T-${String(i).padStart(2, '0')}</div>
       <div class="tool-name">Tool ${i}</div>
       <div class="tool-conf" id="conf-${i}">—</div>
       <div class="conf-bar-track"><div class="conf-bar-fill" id="bar-${i}"></div></div>
@@ -214,9 +224,9 @@ function updateWSStatus(status) {
   const el = document.getElementById('ws-status');
   if (!el) return;
   const configs = {
-    connected:    { dot: 'active',  text: 'Live',         color: 'var(--accent)' },
-    connecting:   { dot: 'idle',    text: 'Connecting…',  color: 'var(--warn)' },
-    disconnected: { dot: 'danger',  text: 'Disconnected', color: 'var(--danger)' },
+    connected: { dot: 'active', text: 'Live', color: 'var(--accent)' },
+    connecting: { dot: 'idle', text: 'Connecting…', color: 'var(--warn)' },
+    disconnected: { dot: 'danger', text: 'Disconnected', color: 'var(--danger)' },
   };
   const c = configs[status] || configs.disconnected;
   el.innerHTML = `<span class="pulse-dot ${c.dot}"></span> <span style="color:${c.color}">${c.text}</span>`;
@@ -242,6 +252,10 @@ function getToolEls(id) {
 }
 
 function handleDetection(data) {
+  // While in upload mode, ignore WebSocket frames (they have 0 detections from simulated camera).
+  // Only allow through if it's a fresh upload (source === 'upload').
+  if (isUploadMode && data.source !== 'upload') return;
+
   pendingDetection = data;
   if (renderScheduled) return;
   renderScheduled = true;
@@ -254,9 +268,9 @@ function handleDetection(data) {
 }
 
 function renderDetection(data) {
-  // Update camera feed
+  // Update camera feed — skip if user uploaded an image (stays until Camera ON is clicked)
   const feed = document.getElementById('camera-feed');
-  if (feed && data.frame) {
+  if (feed && data.frame && !isUploadMode) {
     feed.src = `data:image/jpeg;base64,${data.frame}`;
     feed.style.display = 'block';
     const placeholder = document.getElementById('camera-placeholder');
@@ -314,7 +328,7 @@ function renderDetection(data) {
           .map(d => `
             <div class="stat-row">
               <span class="stat-label">${d.name}</span>
-              <span class="stat-value" style="color:var(--accent);font-size:0.8rem">${(d.confidence*100).toFixed(0)}% conf</span>
+              <span class="stat-value" style="color:var(--accent);font-size:0.8rem">${(d.confidence * 100).toFixed(0)}% conf</span>
             </div>`)
           .join('');
       }
@@ -339,7 +353,7 @@ async function refreshActiveSession() {
   const noSession = document.getElementById('no-session');
   const hasSession = document.getElementById('has-session');
   const startBtn = document.getElementById('btn-start');
-  const endBtn   = document.getElementById('btn-end');
+  const endBtn = document.getElementById('btn-end');
 
   if (session) {
     if (noSession) noSession.style.display = 'none';
@@ -352,7 +366,7 @@ async function refreshActiveSession() {
       : session.started_at + 'Z';
     startSessionTimer(new Date(startUTC));
     if (startBtn) startBtn.style.display = 'none';
-    if (endBtn)   endBtn.style.display = 'flex';
+    if (endBtn) endBtn.style.display = 'flex';
     resetReconciliationPanel(false);
 
   } else {
@@ -360,7 +374,7 @@ async function refreshActiveSession() {
     if (hasSession) hasSession.style.display = 'none';
     stopSessionTimer();
     if (startBtn) startBtn.style.display = 'flex';
-    if (endBtn)   endBtn.style.display = 'none';
+    if (endBtn) endBtn.style.display = 'none';
     resetReconciliationPanel(true);
 
   }
@@ -398,10 +412,10 @@ async function endSurgery() {
 
 // Expose globally for onclick
 window.startSurgery = startSurgery;
-window.endSurgery   = endSurgery;
-window.logout       = logout;
-window.saveTools    = saveTools;
-window.checkTools   = checkTools;
+window.endSurgery = endSurgery;
+window.logout = logout;
+window.saveTools = saveTools;
+window.checkTools = checkTools;
 
 // ── Timer ─────────────────────────────────────────────────────────
 function startSessionTimer(startDate) {
@@ -581,7 +595,7 @@ async function loadHistory() {
   sessions.forEach(s => {
     const started = new Date(s.started_at).toLocaleString();
     const dur = s.duration_seconds != null
-      ? `${Math.floor(s.duration_seconds/60)}m ${s.duration_seconds%60}s`
+      ? `${Math.floor(s.duration_seconds / 60)}m ${s.duration_seconds % 60}s`
       : '—';
     const status = s.is_active
       ? `<span class="badge badge-surgeon">Active</span>`

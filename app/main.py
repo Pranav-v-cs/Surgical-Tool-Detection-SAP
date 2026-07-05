@@ -184,7 +184,14 @@ def run_inference_on_latest_frame() -> list[dict]:
     detections = get_engine().detect(frame)
     payload = detections_to_payload(detections)
     print(f"[INFERENCE] → {len(payload)} tools detected")
-    state.set_latest_detections(payload, datetime.utcnow())
+
+    # On the simulated blank camera, don't overwrite real detections (from an
+    # uploaded image) with an empty result.  On a real webcam, always update
+    # so the display accurately reflects what the camera currently sees.
+    existing, _ = state.get_latest_detections()
+    if payload or not existing or not state.is_simulated_camera:
+        state.set_latest_detections(payload, datetime.utcnow())
+
     _persist_detection_sample(payload)
     return payload
 
@@ -228,11 +235,21 @@ async def on_startup():
     threading.Thread(target=get_engine, daemon=True, name="model-loader").start()
 
     # Start camera -> inference pipeline
-    threading.Thread(
-        target=lambda: init_camera(_on_frame),
-        daemon=True,
-        name="camera-init",
-    ).start()
+    def _start_camera():
+        from .camera import WebcamCamera, SimulatedCamera
+        cam = WebcamCamera(index=0)
+        try:
+            cam.start(_on_frame)
+            state.is_simulated_camera = False  # real webcam connected
+            print("[CAMERA] Real webcam active — live inference enabled")
+        except RuntimeError as exc:
+            print(f"⚠️  Webcam unavailable ({exc}). Using simulated camera.")
+            from .camera import SimulatedCamera
+            sim = SimulatedCamera()
+            sim.start(_on_frame)
+            state.is_simulated_camera = True
+
+    threading.Thread(target=_start_camera, daemon=True, name="camera-init").start()
     threading.Thread(
         target=_inference_loop,
         daemon=True,
