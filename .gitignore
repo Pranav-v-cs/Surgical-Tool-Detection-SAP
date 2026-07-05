@@ -41,8 +41,8 @@ dataset1-pic-xml/
 dataset_yolo/images/
 dataset_yolo/labels/
 runs/
-models/
-*.pt
+# models/
+# *.pt
 *.pth
 *.onnx
 *.engine
